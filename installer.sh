@@ -37,15 +37,13 @@ select_disk() {
 
 # Function to check free disk space before partitioning
 check_disk_space() {
-    # Calculate required space (in MB) - Adjust these values if needed
-    # Considering 1 MiB = 1048576 bytes and 1 MB = 1000000 bytes
-    # We use a conservative estimate to ensure enough space
-    boot_size_mb=$((1024 * 1048576 / 1000000)) # 1 GiB in MB considering binary to decimal conversion
+    # Calculate required space (in MB)
+    boot_size_mb=$((1024 * 1048576 / 1000000)) # 1 GiB in MB
     required_root_size_mb=25000 # Minimum 25 GB for root
     total_required_mb=$((boot_size_mb + required_root_size_mb))
 
     # Get disk size (in MB)
-    disk_size_mb=$(lsblk -b "$target_disk" -o SIZE -n | awk '{print int($1/1000000)}') # Convert bytes to MB
+    disk_size_mb=$(lsblk -b "$target_disk" -o SIZE -n | awk '{print int($1/1000000)}')
 
     echo "==== Checking available disk space ===="
     echo "==== Required space: $total_required_mb MB"
