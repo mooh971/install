@@ -60,8 +60,11 @@ check_disk_space() {
     fi
 }
 
-# Function to partition the selected disk
+# Function to wipe out existing partitions and partition the selected disk
 partition_disk() {
+    echo "==== Wiping out existing partitions on $target_disk ===="
+    sgdisk --zap-all "$target_disk"
+
     echo "==== Partitioning disk $target_disk ===="
     # Create a GPT partition table
     parted -s "$target_disk" mklabel gpt
