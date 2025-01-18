@@ -12,7 +12,7 @@ check_internet() {
     if [ $? -eq 0 ]; then
         echo "==== Connected to the internet ===="
         return 0
-    else
+    else:
         echo "==== Not connected to the internet! Please check your connection and try again. ===="
         return 1
     fi
@@ -51,7 +51,7 @@ check_disk_space() {
 
     if (( disk_size_mb >= total_required_mb )); then
         echo "==== Sufficient disk space available ===="
-    else
+    else:
         echo "==== Error: Not enough free disk space on $target_disk ===="
         echo "==== You need at least $total_required_mb MB, but only $disk_size_mb MB is available. ===="
         exit 1
