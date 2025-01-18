@@ -1,57 +1,117 @@
 #!/bin/bash
 
-# اسم ملف بايثون الذي سيتم تشغيله
+# Name of the Python script to be executed
 python_script="arch-installer.py"
 
-# مسار بايثون (بعد التثبيت)
+# Path to the Python binary (after installation)
 python_bin="/usr/bin/python"
 
-# دالة لفحص الاتصال بالإنترنت
+# Function to check internet connectivity
 check_internet() {
     ping -c 1 google.com &> /dev/null
     if [ $? -eq 0 ]; then
-        echo "==== متصل بالإنترنت ===="
+        echo "==== Connected to the internet ===="
         return 0
     else
-        echo "==== غير متصل بالإنترنت! تأكد من الاتصال وحاول مرة أخرى. ===="
+        echo "==== Not connected to the internet! Please check your connection and try again. ===="
         return 1
     fi
 }
 
-# دالة لتحميل بايثون
-install_python() {
-    echo "==== تحميل بايثون ===="
-    pacstrap /mnt base python
-    if [ $? -eq 0 ]; then
-        echo "==== تم تحميل بايثون بنجاح ===="
+# Function to display a list of available disks and let the user select one
+select_disk() {
+    echo "==== Available disks ===="
+    lsblk -o NAME,FSTYPE,SIZE,MOUNTPOINT | grep -v "loop"
+    
+    read -r -p "Enter the name of the disk you want to use (e.g., sda): " selected_disk
+    
+    # Validate the disk name
+    if lsblk /dev/"$selected_disk" &> /dev/null; then
+      echo "==== Selected disk: /dev/$selected_disk ===="
+      target_disk="/dev/$selected_disk"
     else
-        echo "==== فشل تحميل بايثون! تحقق من اتصالك بالإنترنت وحاول مرة أخرى. ===="
+      echo "==== Error: Disk /dev/$selected_disk not found ===="
+      exit 1
+    fi
+}
+
+# Function to partition the selected disk
+partition_disk() {
+    echo "==== Partitioning disk $target_disk ===="
+    # Create a GPT partition table
+    sgdisk --zap-all "$target_disk"
+    sgdisk --new=1:0:+512M --typecode=1:ef00 --change-name=1:BOOT "$target_disk" # boot partition
+    sgdisk --new=2:0:0 --typecode=2:8300 --change-name=2:ROOT "$target_disk"  # root partition
+
+    # Wait for the partitions to appear
+    udevadm settle
+    echo "==== Disk partitioned successfully ===="
+}
+
+# Function to format the partitions
+format_partitions() {
+    echo "==== Formatting partitions ===="
+    mkfs.vfat -F 32 "${target_disk}1"  # Format boot partition as FAT32
+    mkfs.ext4 "${target_disk}2"  # Format root partition as ext4
+    echo "==== Partitions formatted successfully ===="
+}
+
+# Function to mount the partitions
+mount_partitions() {
+    echo "==== Mounting partitions ===="
+    mount "${target_disk}2" /mnt  # Mount root partition
+    mkdir /mnt/boot
+    mount "${target_disk}1" /mnt/boot  # Mount boot partition
+    echo "==== Partitions mounted successfully ===="
+}
+
+# Function to install Python
+install_python() {
+    echo "==== Installing Python ===="
+    pacstrap /mnt base python linux linux-firmware
+    if [ $? -eq 0 ]; then
+        echo "==== Python installed successfully ===="
+    else:
+        echo "==== Failed to install Python! Check your internet connection and try again. ===="
         exit 1
     fi
 }
 
-# دالة لتشغيل ملف بايثون
+# Function to run the Python script
 run_python_script() {
-    echo "==== تشغيل $python_script ===="
+    echo "==== Running $python_script ===="
     arch-chroot /mnt "$python_bin" "/root/$python_script"
     if [ $? -eq 0 ]; then
-        echo "==== تم تشغيل $python_script بنجاح ===="
-    else
-        echo "==== فشل تشغيل $python_script! تحقق من الكود وحاول مرة أخرى. ===="
+        echo "==== $python_script executed successfully ===="
+    else:
+        echo "==== Failed to execute $python_script! Check the code and try again. ===="
         exit 1
     fi
 }
 
-# الدالة الرئيسية
+# Main function
 main() {
     check_internet || exit 1
-    # تركيب النظام الأساسي قبل تثبيت بايثون
-    echo "==== تركيب النظام الأساسي ===="
-    pacstrap /mnt base linux linux-firmware
-    echo "تم تركيب النظام الأساسي بنجاح!"
-    # نسخ ملف بايثون إلى  mnt/root
-    echo "==== نسخ $python_script إلى /mnt/root/ ===="
+
+    select_disk
+
+    # Important warning!
+    echo "==== WARNING: This will repartition the disk $target_disk ===="
+    echo "==== Make sure you have backed up all your important data ===="
+    read -r -p "Are you sure you want to proceed? (y/n): " response
+    if [[ ! "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+        echo "==== Operation cancelled ===="
+        exit 0
+    fi
+
+    partition_disk
+    format_partitions
+    mount_partitions
+
+    # Copy the Python script to /mnt/root
+    echo "==== Copying $python_script to /mnt/root/ ===="
     cp "$python_script" /mnt/root/
+
     install_python
     run_python_script
 }
