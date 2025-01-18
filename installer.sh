@@ -22,16 +22,39 @@ check_internet() {
 select_disk() {
     echo "==== Available disks ===="
     lsblk -o NAME,FSTYPE,SIZE,MOUNTPOINT | grep -v "loop"
-    
+
     read -r -p "Enter the name of the disk you want to use (e.g., sda): " selected_disk
-    
+
     # Validate the disk name
     if lsblk /dev/"$selected_disk" &> /dev/null; then
-      echo "==== Selected disk: /dev/$selected_disk ===="
-      target_disk="/dev/$selected_disk"
+        echo "==== Selected disk: /dev/$selected_disk ===="
+        target_disk="/dev/$selected_disk"
+    else:
+        echo "==== Error: Disk /dev/$selected_disk not found ===="
+        exit 1
+    fi
+}
+
+# Function to check free disk space before partitioning
+check_disk_space() {
+    # Calculate required space (in MB) - Adjust these values if needed
+    boot_size_mb=512
+    required_root_size_mb=25000 # Minimum 25 GB for root
+    total_required_mb=$((boot_size_mb + required_root_size_mb))
+
+    # Get disk size (in MB)
+    disk_size_mb=$(lsblk -b "$target_disk" -o SIZE -n | awk '{print int($1/1024/1024)}')
+
+    echo "==== Checking available disk space ===="
+    echo "==== Required space: $total_required_mb MB"
+    echo "==== Available space on $target_disk: $disk_size_mb MB"
+
+    if (( disk_size_mb >= total_required_mb )); then
+        echo "==== Sufficient disk space available ===="
     else
-      echo "==== Error: Disk /dev/$selected_disk not found ===="
-      exit 1
+        echo "==== Error: Not enough free disk space on $target_disk ===="
+        echo "==== You need at least $total_required_mb MB, but only $disk_size_mb MB is available. ===="
+        exit 1
     fi
 }
 
@@ -65,14 +88,14 @@ mount_partitions() {
     echo "==== Partitions mounted successfully ===="
 }
 
-# Function to install Python
-install_python() {
-    echo "==== Installing Python ===="
-    pacstrap /mnt base python linux linux-firmware
+# Function to install the base system and Python
+install_base() {
+    echo "==== Installing base system and Python ===="
+    pacstrap /mnt base linux linux-firmware python
     if [ $? -eq 0 ]; then
-        echo "==== Python installed successfully ===="
+        echo "==== Base system and Python installed successfully ===="
     else:
-        echo "==== Failed to install Python! Check your internet connection and try again. ===="
+        echo "==== Failed to install base system! Check your internet connection and try again. ===="
         exit 1
     fi
 }
@@ -94,6 +117,7 @@ main() {
     check_internet || exit 1
 
     select_disk
+    check_disk_space
 
     # Important warning!
     echo "==== WARNING: This will repartition the disk $target_disk ===="
@@ -112,7 +136,7 @@ main() {
     echo "==== Copying $python_script to /mnt/root/ ===="
     cp "$python_script" /mnt/root/
 
-    install_python
+    install_base
     run_python_script
 }
 
