@@ -38,12 +38,14 @@ select_disk() {
 # Function to check free disk space before partitioning
 check_disk_space() {
     # Calculate required space (in MB) - Adjust these values if needed
-    boot_size_mb=512
+    # Considering 1 MiB = 1048576 bytes and 1 MB = 1000000 bytes
+    # We use a conservative estimate to ensure enough space
+    boot_size_mb=$((1024 * 1048576 / 1000000)) # 1 GiB in MB considering binary to decimal conversion
     required_root_size_mb=25000 # Minimum 25 GB for root
     total_required_mb=$((boot_size_mb + required_root_size_mb))
 
     # Get disk size (in MB)
-    disk_size_mb=$(lsblk -b "$target_disk" -o SIZE -n | awk '{print int($1/1024/1024)}')
+    disk_size_mb=$(lsblk -b "$target_disk" -o SIZE -n | awk '{print int($1/1000000)}') # Convert bytes to MB
 
     echo "==== Checking available disk space ===="
     echo "==== Required space: $total_required_mb MB"
@@ -62,9 +64,13 @@ check_disk_space() {
 partition_disk() {
     echo "==== Partitioning disk $target_disk ===="
     # Create a GPT partition table
-    sgdisk --zap-all "$target_disk"
-    sgdisk --new=1:0:+512M --typecode=1:ef00 --change-name=1:BOOT "$target_disk" # boot partition
-    sgdisk --new=2:0:0 --typecode=2:8300 --change-name=2:ROOT "$target_disk"  # root partition
+    parted -s "$target_disk" mklabel gpt
+    # Create a 1 GiB FAT32 partition for EFI system partition (ESP)
+    parted -s "$target_disk" mkpart primary fat32 1MiB 1025MiB
+    # Set the ESP flag on the first partition
+    parted -s "$target_disk" set 1 esp on
+    # Create an ext4 partition for the rest of the disk
+    parted -s "$target_disk" mkpart primary ext4 1025MiB 100%
 
     # Wait for the partitions to appear
     udevadm settle
@@ -74,7 +80,7 @@ partition_disk() {
 # Function to format the partitions
 format_partitions() {
     echo "==== Formatting partitions ===="
-    mkfs.vfat -F 32 "${target_disk}1"  # Format boot partition as FAT32
+    mkfs.fat -F 32 "${target_disk}1"  # Format boot partition as FAT32
     mkfs.ext4 "${target_disk}2"  # Format root partition as ext4
     echo "==== Partitions formatted successfully ===="
 }
@@ -83,7 +89,7 @@ format_partitions() {
 mount_partitions() {
     echo "==== Mounting partitions ===="
     mount "${target_disk}2" /mnt  # Mount root partition
-    mkdir /mnt/boot
+    mkdir -p /mnt/boot
     mount "${target_disk}1" /mnt/boot  # Mount boot partition
     echo "==== Partitions mounted successfully ===="
 }
