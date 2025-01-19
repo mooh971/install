@@ -4,8 +4,22 @@
 #                     Arch Linux Installation Script (GUI)
 #----------------------------------------------------------------------------
 
-# --- Step 1 : Partition Disk ---
-disk=$(lsblk -n -o NAME,SIZE | zenity --list --title="Select Disk" --column="Disk" --column="Size" --text="Select the disk to install Arch Linux on." --width=400 --height=300)
+# --- Step 0 : Ensure Zenity is Installed ---
+if ! command -v zenity &>/dev/null; then
+    echo "Zenity غير مثبت. يتم تثبيته الآن..."
+    sudo pacman -S --noconfirm zenity
+    if [ $? -ne 0 ]; then
+        echo "تعذر تثبيت Zenity. الرجاء تثبيته يدويًا."
+        exit 1
+    fi
+fi
+
+# --- Step 1 : Keyboard Layout ---
+zenity --info --text="Setting keyboard layout to US."
+loadkeys us
+
+# --- Step 2 : Select Disk ---
+disk=$(lsblk -dn -o NAME,SIZE | zenity --list --title="Select Disk" --column="Disk" --column="Size" --text="Select the disk to install Arch Linux on." --width=400 --height=300)
 
 if [ -z "$disk" ]; then
     zenity --error --text="No disk selected. Exiting."
@@ -18,25 +32,15 @@ parted -s /dev/$disk mkpart primary fat32 1MiB 1025MiB
 parted -s /dev/$disk set 1 esp on
 parted -s /dev/$disk mkpart primary ext4 1025MiB 100%
 
-# --- Step 2 : Formatting Partitions ---
+# --- Step 3 : Formatting Partitions ---
 zenity --info --text="Formatting partitions..."
 mkfs.fat -F 32 /dev/${disk}1
 mkfs.ext4 /dev/${disk}2
 
-# --- Step 3 : Mounting Partitions ---
+# --- Step 4 : Mounting Partitions ---
 zenity --info --text="Mounting partitions..."
 mount /dev/${disk}2 /mnt
 mount --mkdir /dev/${disk}1 /mnt/boot
-
-# --- Step 4 : Ensure Zenity is Installed ---
-if ! command -v zenity &>/dev/null; then
-    zenity --info --text="Zenity is not installed. Installing now..."
-    sudo pacman -S --noconfirm zenity
-    if [ $? -ne 0 ]; then
-        zenity --error --text="Failed to install Zenity. Please install it manually."
-        exit 1
-    fi
-fi
 
 # --- Step 5 : Install Base System ---
 zenity --info --text="Installing base system. This may take some time."
