@@ -30,10 +30,10 @@ mount --mkdir /dev/${disk}1 /mnt/boot
 
 # --- Step 4 : Ensure Zenity is Installed ---
 if ! command -v zenity &>/dev/null; then
-    echo "Zenity غير مثبت. يتم تثبيته الآن..."
+    zenity --info --text="Zenity is not installed. Installing now..."
     sudo pacman -S --noconfirm zenity
     if [ $? -ne 0 ]; then
-        echo "تعذر تثبيت Zenity. الرجاء تثبيته يدويًا."
+        zenity --error --text="Failed to install Zenity. Please install it manually."
         exit 1
     fi
 fi
