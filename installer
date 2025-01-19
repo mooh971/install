@@ -4,25 +4,11 @@
 #                     Arch Linux Installation Script (GUI)
 #----------------------------------------------------------------------------
 
-# --- Step 0 : Ensure Zenity is Installed ---
-if ! command -v zenity &>/dev/null; then
-    echo "Zenity غير مثبت. يتم تثبيته الآن..."
-    sudo pacman -S --noconfirm zenity
-    if [ $? -ne 0 ]; then
-        echo "تعذر تثبيت Zenity. الرجاء تثبيته يدويًا."
-        exit 1
-    fi
-fi
-
-# --- Step 1 : Keyboard Layout ---
-zenity --info --text="Setting keyboard layout to US."
-loadkeys us
-
 # --- Step 2 : Disk ---
 lsblk
-disk=$(zenity --entry --title="Select Disk" --text="Enter the disk name (e.g., sda, sdb):")
+disk=$(read -p "Enter the disk name (e.g., sda, sdb):" && echo $REPLY)
 if [ -z "$disk" ]; then
-    zenity --error --text="No disk selected. Exiting."
+    echo "No disk selected. Exiting."
     exit 1
 fi
 
@@ -40,24 +26,38 @@ mkfs.ext4 /dev/${disk}2
 mount /dev/${disk}2 /mnt
 mount --mkdir /dev/${disk}1 /mnt/boot
 
-# --- Step 5 : Install Base System ---
+# --- Step 5 : Ensure Zenity is Installed ---
+if ! command -v zenity &>/dev/null; then
+    echo "Zenity غير مثبت. يتم تثبيته الآن..."
+    sudo pacman -S --noconfirm zenity
+    if [ $? -ne 0 ]; then
+        echo "تعذر تثبيت Zenity. الرجاء تثبيته يدويًا."
+        exit 1
+    fi
+fi
+
+# --- Step 6 : Keyboard Layout ---
+zenity --info --text="Setting keyboard layout to US."
+loadkeys us
+
+# --- Step 7 : Install Base System ---
 zenity --info --text="Installing base system. This may take some time."
 pacstrap -K /mnt base base-devel linux linux-firmware git vim neovim neofetch \
   xorg xorg-xprop xorg-xset sudo firefox man-db man-pages grub efibootmgr networkmanager kitty
 
-# --- Step 6 : Generate fstab ---
+# --- Step 8 : Generate fstab ---
 genfstab -U /mnt >> /mnt/etc/fstab
 
-# --- Step 7 : Timezone ---
+# --- Step 9 : Timezone ---
 ln -sf /usr/share/zoneinfo/UTC /mnt/etc/localtime
 
-# --- Step 8 : Locale ---
+# --- Step 10 : Locale ---
 zenity --info --text="Configuring locale..."
 echo "LANG=en_US.UTF-8" > /mnt/etc/locale.conf
 echo "en_US.UTF-8 UTF-8" >> /mnt/etc/locale.gen
 arch-chroot /mnt locale-gen
 
-# --- Step 9 : Hostname ---
+# --- Step 11 : Hostname ---
 hostname=$(zenity --entry --title="Hostname" --text="Enter hostname:")
 
 if [ -z "$hostname" ]; then
@@ -67,11 +67,11 @@ fi
 
 echo "$hostname" > /mnt/etc/hostname
 
-# --- Step 10 : Root Password ---
+# --- Step 12 : Root Password ---
 zenity --info --text="Set root password in the next step."
 arch-chroot /mnt passwd
 
-# --- Step 11 : User Account ---
+# --- Step 13 : User Account ---
 username=$(zenity --entry --title="Username" --text="Enter username:")
 if [ -z "$username" ]; then
     zenity --error --text="No username entered. Exiting."
@@ -82,14 +82,14 @@ arch-chroot /mnt useradd -m -G users,storage,video,audio,wheel -s /bin/bash "$us
 zenity --info --text="Set password for user $username in the next step."
 arch-chroot /mnt passwd "$username"
 
-# --- Step 12 : GRUB Installation ---
+# --- Step 14 : GRUB Installation ---
 arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
 arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
 
-# --- Step 13 : Enable NetworkManager ---
+# --- Step 15 : Enable NetworkManager ---
 arch-chroot /mnt systemctl enable NetworkManager
 
-# --- Step 14 : Window Manager Installation ---
+# --- Step 16 : Window Manager Installation ---
 WM=$(zenity --list --title="Select Window Manager" --column="Window Manager" --text="Select your preferred Window Manager:" i3 awesomewm bspwm)
 
 if [ -n "$WM" ]; then
@@ -99,7 +99,7 @@ else
     exit 1
 fi
 
-# --- Step 15 : Display Manager Installation ---
+# --- Step 17 : Display Manager Installation ---
 displayManager=$(zenity --list --title="Select Display Manager" --column="Display Manager" --text="Select your preferred Display Manager:" sddm lightdm)
 
 if [ "$displayManager" == "sddm" ]; then
