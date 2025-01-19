@@ -1,0 +1,115 @@
+#!/bin/bash
+
+#----------------------------------------------------------------------------
+#                       Arch Linux Installation Script
+#----------------------------------------------------------------------------
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+END='\033[0m'
+
+# --- Step 1 : Keyboard ---
+echo -e "${BLUE}Setting keyboard layout to US...${END}"
+loadkeys us
+
+# --- Step 2 : Disk Partitioning ---
+echo -e "${BLUE}Available disks:${END}"
+lsblk
+read -p "Enter disk to partition (e.g., sda): " disk
+
+if [ ! -b "/dev/$disk" ]; then
+  echo -e "${RED}Invalid disk: /dev/$disk${END}"
+  exit 1
+fi
+
+echo -e "${GREEN}Partitioning /dev/$disk...${END}"
+parted -s /dev/$disk mklabel gpt
+parted -s /dev/$disk mkpart primary fat32 1MiB 1025MiB
+parted -s /dev/$disk set 1 esp on
+parted -s /dev/$disk mkpart primary ext4 1025MiB 100%
+
+# --- Step 3 : Formatting Partitions ---
+echo -e "${GREEN}Formatting partitions...${END}"
+mkfs.fat -F 32 /dev/${disk}1
+mkfs.ext4 /dev/${disk}2
+
+# --- Step 4 : Mount Partitions ---
+echo -e "${GREEN}Mounting partitions...${END}"
+mount /dev/${disk}2 /mnt
+mount --mkdir /dev/${disk}1 /mnt/boot
+
+# --- Step 5 : Install Base System ---
+echo -e "${GREEN}Installing base packages...${END}"
+pacstrap -K /mnt base base-devel linux linux-firmware git vim neovim neofetch \
+  xorg xorg-xprop xorg-xset sudo firefox man-db man-pages grub efibootmgr networkmanager kitty
+
+# --- Step 6 : Generate fstab ---
+echo -e "${GREEN}Generating fstab...${END}"
+genfstab -U /mnt >> /mnt/etc/fstab
+
+# --- Step 7 : Timezone ---
+echo -e "${GREEN}Setting timezone...${END}"
+ln -sf /usr/share/zoneinfo/UTC /mnt/etc/localtime
+
+# --- Step 8 : Locale ---
+echo -e "${GREEN}Configuring locale...${END}"
+echo "LANG=en_US.UTF-8" > /mnt/etc/locale.conf
+echo "en_US.UTF-8 UTF-8" >> /mnt/etc/locale.gen
+arch-chroot /mnt locale-gen
+
+# --- Step 9 : Hostname ---
+read -p "Enter hostname: " hostname
+echo "$hostname" > /mnt/etc/hostname
+
+# --- Step 10 : Root Password ---
+echo -e "${GREEN}Set root password...${END}"
+arch-chroot /mnt passwd
+
+# --- Step 11 : User Account ---
+read -p "Enter username: " username
+arch-chroot /mnt useradd -m -G users,storage,video,audio,wheel -s /bin/bash "$username"
+arch-chroot /mnt passwd "$username"
+
+# --- Step 12 : GRUB Installation ---
+echo -e "${GREEN}Installing and configuring GRUB...${END}"
+arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
+arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
+
+# --- Step 13 : Enable NetworkManager ---
+echo -e "${GREEN}Enabling NetworkManager...${END}"
+arch-chroot /mnt systemctl enable NetworkManager
+
+# --- Step 14 : Window Manager Installation ---
+echo -e "${BLUE}Choose a Window Manager:${END}"
+select WM in i3 awesomewm bspwm; do
+  if [ -n "$WM" ]; then
+    arch-chroot /mnt pacman -S --noconfirm $WM
+    break
+  else
+    echo -e "${RED}Invalid choice, please select a valid option.${END}"
+  fi
+done
+
+# --- Step 15 : Display Manager Installation ---
+read -p "Enter display manager (sddm, lightdm): " displayManager
+
+case "$displayManager" in
+  sddm)
+    arch-chroot /mnt pacman -S --noconfirm sddm
+    arch-chroot /mnt systemctl enable sddm
+    ;;
+  lightdm)
+    arch-chroot /mnt pacman -S --noconfirm lightdm lightdm-gtk-greeter
+    arch-chroot /mnt systemctl enable lightdm
+    ;;
+  *)
+    echo -e "${RED}Invalid display manager option.${END}"
+    ;;
+esac
+
+# --- Finish ---
+echo -e "${GREEN}Installation complete!${END}"
+echo -e "Made By: Arch Linux, Discord: .t5a\nSNAIDY/Moayd, Discord: eax3"
+echo -e "Reboot now!"
