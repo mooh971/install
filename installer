@@ -5,7 +5,7 @@
 #----------------------------------------------------------------------------
 
 # --- Step 1 : Partition Disk ---
-disk=$(lsblk -dn -o NAME,SIZE | zenity --list --title="Select Disk" --column="Disk" --column="Size" --text="Select the disk to install Arch Linux on." --width=400 --height=300)
+disk=$(lsblk -n -o NAME,SIZE | zenity --list --title="Select Disk" --column="Disk" --column="Size" --text="Select the disk to install Arch Linux on." --width=400 --height=300)
 
 if [ -z "$disk" ]; then
     zenity --error --text="No disk selected. Exiting."
